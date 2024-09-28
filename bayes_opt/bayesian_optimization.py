@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import Matern
+import pickle
 
 from bayes_opt import acquisition
 from bayes_opt.constraint import ConstraintModel
@@ -110,7 +111,9 @@ class BayesianOptimization(Observable):
         verbose: int = 2,
         bounds_transformer: DomainTransformer | None = None,
         allow_duplicate_points: bool = False,
+        population: bool = True, #Differenciation of population and adaptation
     ):
+        self._population = population
         self._random_state = ensure_rng(random_state)
         self._allow_duplicate_points = allow_duplicate_points
         self._queue: deque[Mapping[str, float] | Sequence[float] | NDArray[Float]] = deque()
@@ -315,7 +318,13 @@ class BayesianOptimization(Observable):
                 # The bounds transformer should only modify the bounds after
                 # the init_points points (only for the true iterations)
                 self.set_bounds(self._bounds_transformer.transform(self._space))
-
+        if self._population:
+            with open('Acq.pkl', 'wb') as file:
+                pickle.dump(self._acquisition_function, file)
+            with open('Space.pkl', 'wb') as file:
+                pickle.dump(self._space, file)
+            with open('GP.pkl', 'wb') as file:
+                pickle.dump(self._gp, file)
         self.dispatch(Events.OPTIMIZATION_END)
 
     def set_bounds(self, new_bounds: Mapping[str, NDArray[Float] | Sequence[float]]) -> None:

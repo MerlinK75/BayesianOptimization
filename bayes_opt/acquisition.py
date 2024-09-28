@@ -78,7 +78,7 @@ class AcquisitionFunction(abc.ABC):
         # we don't really need to see them here.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            gp.fit(target_space.params, target_space.target)
+            gp.fit(target_space.params, target_space.target) #Params and Target of inputs of the Acq, but are arrays
             if target_space.constraint is not None:
                 target_space.constraint.fit(target_space.params, target_space._constraint_values)
 
