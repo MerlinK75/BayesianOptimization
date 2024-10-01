@@ -129,7 +129,15 @@ class BayesianOptimization(Observable):
                 )
         else:
             self._acquisition_function = acquisition_function
+        if not self._population:
+             with open('Acq.pkl', 'rb') as file:
+                self._PAcquisition_function = pickle.load(file)
 
+             with open('Space.pkl', 'rb') as file:
+                self._Pspace = pickle.load(file)
+
+             with open('GP.pkl', 'rb') as file:
+                self._Pgp = pickle.load(file)
         # Internal GP regressor
         self._gp = GaussianProcessRegressor(
             kernel=Matern(nu=2.5),
@@ -254,7 +262,11 @@ class BayesianOptimization(Observable):
             return self._space.array_to_params(self._space.random_sample())
 
         # Finding argmax of the acquisition function.
-        suggestion = self._acquisition_function.suggest(gp=self._gp, target_space=self._space, fit_gp=True)
+        if self._population:
+            suggestion = self._acquisition_function.suggest(gp=self._gp, target_space=self._space, fit_gp=True)
+        else:
+            suggestion = self._acquisition_function.suggest(gp=self._gp, target_space=self._space, fit_gp=True, pop_acq=self._PAcquisition_function, pop_gp=self._Pgp, pop_space=self._Pspace)
+
 
         return self._space.array_to_params(suggestion)
 
@@ -318,6 +330,7 @@ class BayesianOptimization(Observable):
                 # The bounds transformer should only modify the bounds after
                 # the init_points points (only for the true iterations)
                 self.set_bounds(self._bounds_transformer.transform(self._space))
+
         if self._population:
             with open('Acq.pkl', 'wb') as file:
                 pickle.dump(self._acquisition_function, file)
@@ -325,6 +338,7 @@ class BayesianOptimization(Observable):
                 pickle.dump(self._space, file)
             with open('GP.pkl', 'wb') as file:
                 pickle.dump(self._gp, file)
+
         self.dispatch(Events.OPTIMIZATION_END)
 
     def set_bounds(self, new_bounds: Mapping[str, NDArray[Float] | Sequence[float]]) -> None:

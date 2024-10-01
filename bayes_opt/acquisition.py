@@ -89,6 +89,9 @@ class AcquisitionFunction(abc.ABC):
         n_random: int = 10_000,
         n_l_bfgs_b: int = 10,
         fit_gp: bool = True,
+        pop_acq: AcquisitionFunction | None = None,
+        pop_gp: GaussianProcessRegressor | None = None,
+        pop_space: TargetSpace | None = None,
     ) -> NDArray[Float]:
         """Suggest a promising point to probe next.
 
@@ -123,14 +126,19 @@ class AcquisitionFunction(abc.ABC):
             )
             raise TargetSpaceEmptyError(msg)
         self.i += 1
+            
         if fit_gp:
             self._fit_gp(gp=gp, target_space=target_space)
 
-        acq = self._get_acq(gp=gp, constraint=target_space.constraint)
-        return self._acq_min(acq, target_space.bounds, n_random=n_random, n_l_bfgs_b=n_l_bfgs_b)
+        if pop_acq is None:
+            acq = self._get_acq(gp=gp, constraint=target_space.constraint)
+            return self._acq_min(acq, target_space.bounds, n_random=n_random, n_l_bfgs_b=n_l_bfgs_b)
+        else:
+            acq_TAF = self._get_acq(gp=gp, constraint=target_space.constraint, Pgp=pop_gp)
+            return self._acq_min(acq_TAF, target_space.bounds, n_random=n_random, n_l_bfgs_b=n_l_bfgs_b)
 
     def _get_acq(
-        self, gp: GaussianProcessRegressor, constraint: ConstraintModel | None = None
+        self, gp: GaussianProcessRegressor, constraint: ConstraintModel | None = None, Pgp: GaussianProcessRegressor | None = None
     ) -> Callable[[NDArray[Float]], NDArray[Float]]:
         """Prepare the acquisition function for minimization.
 
@@ -154,7 +162,7 @@ class AcquisitionFunction(abc.ABC):
             Function to minimize.
         """
         dim = gp.X_train_.shape[1]
-        if constraint is not None:
+        if constraint is not None and Pgp is None:
 
             def acq(x: NDArray[Float]) -> NDArray[Float]:
                 x = x.reshape(-1, dim)
@@ -166,6 +174,32 @@ class AcquisitionFunction(abc.ABC):
                     mean, std = gp.predict(x, return_std=True)
                     p_constraints = constraint.predict(x)
                 return -1 * self.base_acq(mean, std) * p_constraints
+        elif constraint is None and Pgp is None:
+
+            def acq(x: NDArray[Float]) -> NDArray[Float]:
+                x = x.reshape(-1, dim)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    mean: NDArray[Float]
+                    std: NDArray[Float]
+                    mean, std = gp.predict(x, return_std=True)
+                
+                return -1 * self.base_acq(mean, std)  
+        elif constraint is not None:
+
+            def acq(x: NDArray[Float]) -> NDArray[Float]:
+                x = x.reshape(-1, dim)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    mean: NDArray[Float]
+                    std: NDArray[Float]
+                    p_constraints: NDArray[Float]
+                    mean, std = gp.predict(x, return_std=True)
+                    W = (4-std)/4
+                    Pmean, Pstd = Pgp.predict(x, return_std=True)
+                    PW = (4-Pstd)/4
+                    p_constraints = constraint.predict(x)
+                return -1 * ((PW*self.base_acq(Pmean, Pstd) + W*self.base_acq(mean, std))/PW) * p_constraints
         else:
 
             def acq(x: NDArray[Float]) -> NDArray[Float]:
@@ -175,9 +209,58 @@ class AcquisitionFunction(abc.ABC):
                     mean: NDArray[Float]
                     std: NDArray[Float]
                     mean, std = gp.predict(x, return_std=True)
-                return -1 * self.base_acq(mean, std)
+                    W = (4-std)/4
+                    Pmean, Pstd = Pgp.predict(x, return_std=True)
+                    PW = (4-Pstd)/4
+                return -1 * ((PW*self.base_acq(Pmean, Pstd) + W*self.base_acq(mean, std))/PW)
 
         return acq
+
+    # def _acq_min_TAF( ###Need to implement weights in this function
+    #     self,
+    #     acq_A: Callable[[NDArray[Float]], NDArray[Float]],
+    #     acq_P: Callable[[NDArray[Float]], NDArray[Float]],
+    #     bounds: NDArray[Float],
+    #     n_random: int = 10_000,
+    #     n_l_bfgs_b: int = 10,
+    # ) -> NDArray[Float]:
+    #     """Find the maximum of the acquisition function.
+
+    #     Uses a combination of random sampling (cheap) and the 'L-BFGS-B'
+    #     optimization method. First by sampling `n_warmup` (1e5) points at random,
+    #     and then running L-BFGS-B from `n_iter` (10) random starting points.
+
+    #     Parameters
+    #     ----------
+    #     acq : Callable
+    #         Acquisition function to use. Should accept an array of parameters `x`.
+
+    #     bounds : np.ndarray
+    #         Bounds of the search space. For `N` parameters this has shape
+    #         `(N, 2)` with `[i, 0]` the lower bound of parameter `i` and
+    #         `[i, 1]` the upper bound.
+
+    #     n_random : int
+    #         Number of random samples to use.
+
+    #     n_l_bfgs_b : int
+    #         Number of starting points for the L-BFGS-B optimizer.
+
+    #     Returns
+    #     -------
+    #     np.ndarray
+    #         Parameters maximizing the acquisition function.
+
+    #     """
+    #     if n_random == 0 and n_l_bfgs_b == 0:
+    #         error_msg = "Either n_random or n_l_bfgs_b needs to be greater than 0."
+    #         raise ValueError(error_msg)
+    #     x_min_r, min_acq_r = self._random_sample_minimize(acq, bounds, n_random=n_random)
+    #     x_min_l, min_acq_l = self._l_bfgs_b_minimize(acq, bounds, n_x_seeds=n_l_bfgs_b)
+    #     # Either n_random or n_l_bfgs_b is not 0 => at least one of x_min_r and x_min_l is not None
+    #     if min_acq_r < min_acq_l:
+    #         return x_min_r
+    #     return x_min_l
 
     def _acq_min(
         self,
@@ -648,6 +731,9 @@ class ExpectedImprovement(AcquisitionFunction):
         n_random: int = 10_000,
         n_l_bfgs_b: int = 10,
         fit_gp: bool = True,
+        pop_acq: AcquisitionFunction | None = None,
+        pop_gp: GaussianProcessRegressor | None = None,
+        pop_space: TargetSpace | None = None,
     ) -> NDArray[Float]:
         """Suggest a promising point to probe next.
 
@@ -686,7 +772,7 @@ class ExpectedImprovement(AcquisitionFunction):
         self.y_max = y_max
 
         x_max = super().suggest(
-            gp=gp, target_space=target_space, n_random=n_random, n_l_bfgs_b=n_l_bfgs_b, fit_gp=fit_gp
+            gp=gp, target_space=target_space, n_random=n_random, n_l_bfgs_b=n_l_bfgs_b, fit_gp=fit_gp, pop_acq=pop_acq, pop_gp=pop_gp, pop_space=pop_space,
         )
         self.decay_exploration()
         return x_max

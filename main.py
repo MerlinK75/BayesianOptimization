@@ -12,30 +12,19 @@ def black_box_function(x, y):
     return -x ** 2 - (y - 1) ** 2 + 1
 
 if __name__=='__main__':
-    # # Bounded region of parameter space
-    # pbounds = {'x': (2, 4), 'y': (-3, 3)}
+    # Bounded region of parameter space
+    pbounds = {'x': (2, 4), 'y': (-3, 3)}
 
-    # optimizer = BayesianOptimization(
-    #     f=black_box_function,
-    #     pbounds=pbounds,
-    #     acquisition_function=ExpectedImprovement(xi=0.01),
-    #     population=True)
+    optimizer = BayesianOptimization(
+        f=black_box_function,
+        pbounds=pbounds,
+        acquisition_function=ExpectedImprovement(xi=0.01),
+        population=False)
     
-    # optimizer.maximize(
-    # init_points=5,
-    # n_iter=25)
+    optimizer.maximize(
+    init_points=0,
+    n_iter=15)
 
     # for i, res in enumerate(optimizer.res):
     #     print("Iteration {}: \n\t{}".format(i, res))
-    #     #print(f"GP: {optimizer._gp.get_params()}")
-
-    with open('Acq.pkl', 'rb') as file:
-        Acquisition_function = pickle.load(file)
-
-    with open('Space.pkl', 'rb') as file:
-        space = pickle.load(file)
-
-    with open('GP.pkl', 'rb') as file:
-        gp = pickle.load(file)
-
-    print(Acquisition_function, space, gp)
+    #     #print(f"GP: {optimizer._gp.get_params()}")k
