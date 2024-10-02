@@ -1,6 +1,5 @@
 from bayes_opt import BayesianOptimization
 from bayes_opt.acquisition import ExpectedImprovement
-import pickle
 
 def black_box_function(x, y):
     """Function with unknown internals we wish to maximize.

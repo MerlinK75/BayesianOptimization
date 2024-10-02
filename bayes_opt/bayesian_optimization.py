@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import Matern
 import pickle
+import os
 
 from bayes_opt import acquisition
 from bayes_opt.constraint import ConstraintModel
@@ -129,15 +130,15 @@ class BayesianOptimization(Observable):
                 )
         else:
             self._acquisition_function = acquisition_function
+
         if not self._population:
-             with open('Acq.pkl', 'rb') as file:
-                self._PAcquisition_function = pickle.load(file)
+            self._Pgp_list = []
+            gp_files = [f for f in os.listdir('Population_models') if f.startswith('GP') and f.endswith('.pkl')]
+            gp_files.sort(key=lambda x: int(x[2:-4]))  # Sort files by number
+            for gp_file in gp_files:
+                with open(os.path.join('Population_models', gp_file), 'rb') as file:
+                    self._Pgp_list.append(pickle.load(file))
 
-             with open('Space.pkl', 'rb') as file:
-                self._Pspace = pickle.load(file)
-
-             with open('GP.pkl', 'rb') as file:
-                self._Pgp = pickle.load(file)
         # Internal GP regressor
         self._gp = GaussianProcessRegressor(
             kernel=Matern(nu=2.5),
@@ -265,7 +266,11 @@ class BayesianOptimization(Observable):
         if self._population:
             suggestion = self._acquisition_function.suggest(gp=self._gp, target_space=self._space, fit_gp=True)
         else:
-            suggestion = self._acquisition_function.suggest(gp=self._gp, target_space=self._space, fit_gp=True, pop_acq=self._PAcquisition_function, pop_gp=self._Pgp, pop_space=self._Pspace)
+            suggestion = self._acquisition_function.suggest(gp=self._gp, target_space=self._space, fit_gp=True, 
+                                                            #pop_acq=self._PAcquisition_function, 
+                                                            pop_gp=self._Pgp_list, 
+                                                            #pop_space=self._Pspace
+                                                            )
 
 
         return self._space.array_to_params(suggestion)
@@ -278,8 +283,8 @@ class BayesianOptimization(Observable):
         init_points: int
             Number of parameters to prime the queue with.
         """
-        if not self._queue and self._space.empty:
-            init_points = max(init_points, 1)
+        # if not self._queue and self._space.empty:
+        #     init_points = max(init_points, 1)
 
         for _ in range(init_points):
             self._queue.append(self._space.random_sample())
@@ -332,11 +337,22 @@ class BayesianOptimization(Observable):
                 self.set_bounds(self._bounds_transformer.transform(self._space))
 
         if self._population:
-            with open('Acq.pkl', 'wb') as file:
-                pickle.dump(self._acquisition_function, file)
-            with open('Space.pkl', 'wb') as file:
-                pickle.dump(self._space, file)
-            with open('GP.pkl', 'wb') as file:
+
+            # Get the list of existing GP files
+            existing_files = [f for f in os.listdir('Population_models') if f.startswith('GP') and f.endswith('.pkl')]
+            
+            # Determine the next number for the GP file
+            if existing_files:
+                max_num = max([int(f[2:-4]) for f in existing_files])
+                next_num = max_num + 1
+            else:
+                next_num = 1
+            
+            # Create the new filename
+            new_filename = f'Population_models/GP{next_num}.pkl'
+            
+            # Save the GP model with the new filename
+            with open(new_filename, 'wb') as file:
                 pickle.dump(self._gp, file)
 
         self.dispatch(Events.OPTIMIZATION_END)

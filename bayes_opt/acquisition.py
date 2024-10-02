@@ -89,9 +89,9 @@ class AcquisitionFunction(abc.ABC):
         n_random: int = 10_000,
         n_l_bfgs_b: int = 10,
         fit_gp: bool = True,
-        pop_acq: AcquisitionFunction | None = None,
-        pop_gp: GaussianProcessRegressor | None = None,
-        pop_space: TargetSpace | None = None,
+        #pop_acq: AcquisitionFunction | None = None,
+        pop_gp: list[GaussianProcessRegressor] | None = None,
+        #pop_space: TargetSpace | None = None,
     ) -> NDArray[Float]:
         """Suggest a promising point to probe next.
 
@@ -130,7 +130,7 @@ class AcquisitionFunction(abc.ABC):
         if fit_gp:
             self._fit_gp(gp=gp, target_space=target_space)
 
-        if pop_acq is None:
+        if pop_gp is None:
             acq = self._get_acq(gp=gp, constraint=target_space.constraint)
             return self._acq_min(acq, target_space.bounds, n_random=n_random, n_l_bfgs_b=n_l_bfgs_b)
         else:
@@ -138,7 +138,7 @@ class AcquisitionFunction(abc.ABC):
             return self._acq_min(acq_TAF, target_space.bounds, n_random=n_random, n_l_bfgs_b=n_l_bfgs_b)
 
     def _get_acq(
-        self, gp: GaussianProcessRegressor, constraint: ConstraintModel | None = None, Pgp: GaussianProcessRegressor | None = None
+        self, gp: GaussianProcessRegressor, constraint: ConstraintModel | None = None, Pgp: list[GaussianProcessRegressor] | None = None
     ) -> Callable[[NDArray[Float]], NDArray[Float]]:
         """Prepare the acquisition function for minimization.
 
@@ -195,11 +195,16 @@ class AcquisitionFunction(abc.ABC):
                     std: NDArray[Float]
                     p_constraints: NDArray[Float]
                     mean, std = gp.predict(x, return_std=True)
-                    W = (4-std)/4
-                    Pmean, Pstd = Pgp.predict(x, return_std=True)
-                    PW = (4-Pstd)/4
+                    W = (4-std)/4 ###Estimated weights but will read the paper in more detail to see if this should change
+                    sum_pw_acq = 0.0
+                    sum_pw = 0.0
+                    for gp_model in Pgp:
+                        Pmean, Pstd = gp_model.predict(x, return_std=True)
+                        PW = (4 - Pstd) / 4
+                        sum_pw_acq += PW * self.base_acq(Pmean, Pstd)
+                        sum_pw += PW
                     p_constraints = constraint.predict(x)
-                return -1 * ((PW*self.base_acq(Pmean, Pstd) + W*self.base_acq(mean, std))/PW) * p_constraints
+                    return -1 * ((sum_pw_acq + W * self.base_acq(mean, std)) / sum_pw) * p_constraints
         else:
 
             def acq(x: NDArray[Float]) -> NDArray[Float]:
@@ -210,9 +215,14 @@ class AcquisitionFunction(abc.ABC):
                     std: NDArray[Float]
                     mean, std = gp.predict(x, return_std=True)
                     W = (4-std)/4
-                    Pmean, Pstd = Pgp.predict(x, return_std=True)
-                    PW = (4-Pstd)/4
-                return -1 * ((PW*self.base_acq(Pmean, Pstd) + W*self.base_acq(mean, std))/PW)
+                    sum_pw_acq = 0.0
+                    sum_pw = 0.0
+                    for gp_model in Pgp:
+                        Pmean, Pstd = gp_model.predict(x, return_std=True)
+                        PW = (4 - Pstd) / 4
+                        sum_pw_acq += PW * self.base_acq(Pmean, Pstd)
+                        sum_pw += PW
+                    return -1 * ((sum_pw_acq + W * self.base_acq(mean, std)) / sum_pw)
 
         return acq
 
@@ -731,9 +741,9 @@ class ExpectedImprovement(AcquisitionFunction):
         n_random: int = 10_000,
         n_l_bfgs_b: int = 10,
         fit_gp: bool = True,
-        pop_acq: AcquisitionFunction | None = None,
-        pop_gp: GaussianProcessRegressor | None = None,
-        pop_space: TargetSpace | None = None,
+        #pop_acq: AcquisitionFunction | None = None,
+        pop_gp: list[GaussianProcessRegressor] | None = None,
+        #pop_space: TargetSpace | None = None,
     ) -> NDArray[Float]:
         """Suggest a promising point to probe next.
 
@@ -772,7 +782,10 @@ class ExpectedImprovement(AcquisitionFunction):
         self.y_max = y_max
 
         x_max = super().suggest(
-            gp=gp, target_space=target_space, n_random=n_random, n_l_bfgs_b=n_l_bfgs_b, fit_gp=fit_gp, pop_acq=pop_acq, pop_gp=pop_gp, pop_space=pop_space,
+            gp=gp, target_space=target_space, n_random=n_random, n_l_bfgs_b=n_l_bfgs_b, fit_gp=fit_gp, 
+            #pop_acq=pop_acq, 
+            pop_gp=pop_gp, 
+            #pop_space=pop_space,
         )
         self.decay_exploration()
         return x_max
