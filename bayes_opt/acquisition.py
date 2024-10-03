@@ -21,6 +21,7 @@ The acquisition functions in this module can be grouped the following way:
 from __future__ import annotations
 
 import abc
+import os
 import warnings
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Literal, NoReturn
@@ -195,12 +196,13 @@ class AcquisitionFunction(abc.ABC):
                     std: NDArray[Float]
                     p_constraints: NDArray[Float]
                     mean, std = gp.predict(x, return_std=True)
-                    W = (4-std)/4 ###Estimated weights but will read the paper in more detail to see if this should change
+                    gp_files = [f for f in os.listdir('Population_models') if f.startswith('GP') and f.endswith('.pkl')]
+                    W = 1/(len(gp_files)+1)*(1/std**2)
                     sum_pw_acq = 0.0
                     sum_pw = 0.0
                     for gp_model in Pgp:
                         Pmean, Pstd = gp_model.predict(x, return_std=True)
-                        PW = (4 - Pstd) / 4
+                        PW = 1/(len(gp_files)+1)*(1/Pstd**2)
                         sum_pw_acq += PW * self.base_acq(Pmean, Pstd)
                         sum_pw += PW
                     p_constraints = constraint.predict(x)
@@ -214,12 +216,13 @@ class AcquisitionFunction(abc.ABC):
                     mean: NDArray[Float]
                     std: NDArray[Float]
                     mean, std = gp.predict(x, return_std=True)
-                    W = (4-std)/4
+                    gp_files = [f for f in os.listdir('Population_models') if f.startswith('GP') and f.endswith('.pkl')]
+                    W = 1/(len(gp_files)+1)*(1/std**2)
                     sum_pw_acq = 0.0
                     sum_pw = 0.0
                     for gp_model in Pgp:
                         Pmean, Pstd = gp_model.predict(x, return_std=True)
-                        PW = (4 - Pstd) / 4
+                        PW = 1/(len(gp_files)+1)*(1/Pstd**2)
                         sum_pw_acq += PW * self.base_acq(Pmean, Pstd)
                         sum_pw += PW
                     return -1 * ((sum_pw_acq + W * self.base_acq(mean, std)) / sum_pw)
