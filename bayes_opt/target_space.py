@@ -353,9 +353,8 @@ class TargetSpace:
         # Make copies of the data, so as not to modify the originals incase something fails
         # during the registration process. This prevents out-of-sync data.
         params_copy: NDArray[Float] = np.concatenate([self._params, x.reshape(1, -1)])
-        #print(f"_target: {self._target}, [target]: {[target]}")
-        target_copy: NDArray[Float] = np.concatenate([self._target, target]) #Is target copy conc correctly
-        #print(f"target_copy: {target_copy}")
+        target_copy: NDArray[Float] = np.concatenate([self._target, target]) #Is this correct
+        print(f"target_copy: {target_copy}")
         cache_copy = self._cache.copy()  # shallow copy suffices
 
         if self._constraint is None:
@@ -417,16 +416,15 @@ class TargetSpace:
         if self.target_func is None:
             error_msg = "No target function has been provided."
             raise ValueError(error_msg)
-        
-        targets = [func(**dict_params) for func in self.target_func]
+        target = [func(**dict_params) for func in self.target_func]
 
         if self._constraint is None:
-            self.register(x, targets)
-            return targets
+            self.register(x, target)
+            return target
 
         constraint_value = self._constraint.eval(**dict_params)
-        self.register(x, targets, constraint_value)
-        return targets, constraint_value
+        self.register(x, target, constraint_value)
+        return target, constraint_value
 
     def random_sample(self) -> NDArray[Float]:
         """
@@ -486,17 +484,16 @@ class TargetSpace:
         target_max = self._target_max()
         if target_max is None:
             return None
-        print(f"self.mask: {self.mask}, self.target: {self.target}")
-        target = self.target[self.mask]
-        print(f"self.params: {self.params}")
-        params = self.params[self.mask]
+
+        target = self.target[self.mask]   
+        params = self.params[[self.mask.reshape(-1, 2)[:, 0]]]
         target_max_idx = np.argmax(target)
 
-        res = {"target": target_max, "params": dict(zip(self.keys, params[target_max_idx]))}
+        res = {"target": target_max, "params": dict(zip(self.keys, params[target_max_idx]))} #Could be incorrect with //
 
         if self._constraint is not None:
-            constraint_values = self.constraint_values[self.mask]
-            res["constraint"] = constraint_values[target_max_idx]
+            constraint_values = self.constraint_values[self.mask(-1, 2)[:, 0]]
+            res["constraint"] = constraint_values[target_max_idx//2]
 
         return res
 
