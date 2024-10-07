@@ -104,7 +104,7 @@ class BayesianOptimization(Observable):
 
     def __init__(
         self,
-        f: Callable[..., float] | None,
+        f: list[Callable[..., float]] | None,
         pbounds: Mapping[str, tuple[float, float]],
         acquisition_function: AcquisitionFunction | None = None,
         constraint: NonlinearConstraint | None = None,

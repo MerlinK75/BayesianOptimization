@@ -65,7 +65,7 @@ class TargetSpace:
 
     def __init__(
         self,
-        target_func: Callable[..., float] | None,
+        target_func: list[Callable[..., float]] | None,
         pbounds: Mapping[str, tuple[float, float]],
         constraint: ConstraintModel | None = None,
         random_state: int | RandomState | None = None,
@@ -87,7 +87,7 @@ class TargetSpace:
 
         # preallocated memory for X and Y points
         self._params: NDArray[Float] = np.empty(shape=(0, self.dim))
-        self._target: NDArray[Float] = np.empty(shape=(0,))
+        self._target: NDArray[Float] = np.empty(shape=(len(target_func),))
 
         # keep track of unique points we have seen so far
         self._cache: dict[tuple[float, ...], float | tuple[float, float | NDArray[Float]]] = {}
@@ -292,7 +292,7 @@ class TargetSpace:
     def register(
         self,
         params: Mapping[str, float] | Sequence[float] | NDArray[Float],
-        target: float,
+        target: list[float],
         constraint_value: float | NDArray[Float] | None = None,
     ) -> None:
         """Append a point and its target value to the known data.
@@ -302,8 +302,8 @@ class TargetSpace:
         params : np.ndarray
             a single point, with len(x) == self.dim.
 
-        target : float
-            target function value
+        target : list[float]
+            list of target function value
 
         constraint_value : float or np.ndarray or None
             Constraint function value
@@ -353,7 +353,9 @@ class TargetSpace:
         # Make copies of the data, so as not to modify the originals incase something fails
         # during the registration process. This prevents out-of-sync data.
         params_copy: NDArray[Float] = np.concatenate([self._params, x.reshape(1, -1)])
-        target_copy: NDArray[Float] = np.concatenate([self._target, [target]])
+        #print(f"_target: {self._target}, [target]: {[target]}")
+        target_copy: NDArray[Float] = np.concatenate([self._target, target]) #Is target copy conc correctly
+        #print(f"target_copy: {target_copy}")
         cache_copy = self._cache.copy()  # shallow copy suffices
 
         if self._constraint is None:
@@ -415,15 +417,16 @@ class TargetSpace:
         if self.target_func is None:
             error_msg = "No target function has been provided."
             raise ValueError(error_msg)
-        target = self.target_func(**dict_params)
+        
+        targets = [func(**dict_params) for func in self.target_func]
 
         if self._constraint is None:
-            self.register(x, target)
-            return target
+            self.register(x, targets)
+            return targets
 
         constraint_value = self._constraint.eval(**dict_params)
-        self.register(x, target, constraint_value)
-        return target, constraint_value
+        self.register(x, targets, constraint_value)
+        return targets, constraint_value
 
     def random_sample(self) -> NDArray[Float]:
         """
@@ -483,8 +486,9 @@ class TargetSpace:
         target_max = self._target_max()
         if target_max is None:
             return None
-
+        print(f"self.mask: {self.mask}, self.target: {self.target}")
         target = self.target[self.mask]
+        print(f"self.params: {self.params}")
         params = self.params[self.mask]
         target_max_idx = np.argmax(target)
 
