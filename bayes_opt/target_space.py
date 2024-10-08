@@ -228,7 +228,7 @@ class TargetSpace:
             within_bounds = np.all(
                 (self._bounds[:, 0] <= self._params) & (self._params <= self._bounds[:, 1]), axis=1
             )
-            mask &= within_bounds
+            mask &= within_bounds #Why does this not function when mask groes
 
         return mask
 
@@ -354,7 +354,6 @@ class TargetSpace:
         # during the registration process. This prevents out-of-sync data.
         params_copy: NDArray[Float] = np.concatenate([self._params, x.reshape(1, -1)])
         target_copy: NDArray[Float] = np.concatenate([self._target, target]) #Is this correct
-        print(f"target_copy: {target_copy}")
         cache_copy = self._cache.copy()  # shallow copy suffices
 
         if self._constraint is None:
@@ -485,15 +484,17 @@ class TargetSpace:
         if target_max is None:
             return None
 
-        target = self.target[self.mask]   
-        params = self.params[[self.mask.reshape(-1, 2)[:, 0]]]
+        MASK = self.mask.reshape(-1, len(self.target_func))
+        target = self.target[self.mask] 
+        params = self.params[:, MASK[-1,:]] ##Mask shape is wrong
         target_max_idx = np.argmax(target)
-
-        res = {"target": target_max, "params": dict(zip(self.keys, params[target_max_idx]))} #Could be incorrect with //
-
+        res = {
+            "target": target_max, 
+            "params": dict(zip(self.keys, params[target_max_idx//len(self.target_func)-1]))
+        }
         if self._constraint is not None:
-            constraint_values = self.constraint_values[self.mask(-1, 2)[:, 0]]
-            res["constraint"] = constraint_values[target_max_idx//2]
+            constraint_values = self.constraint_values[:, MASK[-1,:]]
+            res["constraint"] = constraint_values[target_max_idx//len(self.target_func)-1]
 
         return res
 
