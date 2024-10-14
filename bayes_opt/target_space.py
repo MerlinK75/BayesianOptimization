@@ -228,7 +228,7 @@ class TargetSpace:
             within_bounds = np.all(
                 (self._bounds[:, 0] <= self._params) & (self._params <= self._bounds[:, 1]), axis=1
             )
-            mask &= within_bounds #Why does this not function when mask groes
+            mask &= within_bounds #Why does this not function when mask grows
 
         return mask
 
