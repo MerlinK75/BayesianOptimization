@@ -87,7 +87,7 @@ class TargetSpace:
 
         # preallocated memory for X and Y points
         self._params: NDArray[Float] = np.empty(shape=(0, self.dim))
-        self._target: NDArray[Float] = np.empty(shape=(len(target_func),))
+        self._target: NDArray[Float] = np.empty(shape=(0, len(self.target_func)))
 
         # keep track of unique points we have seen so far
         self._cache: dict[tuple[float, ...], float | tuple[float, float | NDArray[Float]]] = {}
@@ -211,13 +211,14 @@ class TargetSpace:
     def mask(self) -> NDArray[np.bool_]:
         """Return a boolean array of valid points.
 
-        Points are valid if they satisfy both the constraint and boundary conditions.
+        Points are valid if they satisfy both the constraint and boundary conditions
+        for all target functions.
 
         Returns
         -------
         np.ndarray
         """
-        mask = np.ones_like(self.target, dtype=bool)
+        mask = np.ones(self._params.shape[0], dtype=bool)
 
         # mask points that don't satisfy the constraint
         if self._constraint is not None:
@@ -228,7 +229,7 @@ class TargetSpace:
             within_bounds = np.all(
                 (self._bounds[:, 0] <= self._params) & (self._params <= self._bounds[:, 1]), axis=1
             )
-            mask &= within_bounds #Why does this not function when mask grows
+            mask &= within_bounds
 
         return mask
 
@@ -292,7 +293,7 @@ class TargetSpace:
     def register(
         self,
         params: Mapping[str, float] | Sequence[float] | NDArray[Float],
-        target: list[float],
+        target: NDArray[Float],
         constraint_value: float | NDArray[Float] | None = None,
     ) -> None:
         """Append a point and its target value to the known data.
@@ -302,8 +303,8 @@ class TargetSpace:
         params : np.ndarray
             a single point, with len(x) == self.dim.
 
-        target : list[float]
-            list of target function value
+        target : float
+            target function value
 
         constraint_value : float or np.ndarray or None
             Constraint function value
@@ -353,7 +354,7 @@ class TargetSpace:
         # Make copies of the data, so as not to modify the originals incase something fails
         # during the registration process. This prevents out-of-sync data.
         params_copy: NDArray[Float] = np.concatenate([self._params, x.reshape(1, -1)])
-        target_copy: NDArray[Float] = np.concatenate([self._target, target]) #Is this correct
+        target_copy: NDArray[Float] = np.vstack([self._target, target]) #EDIT
         cache_copy = self._cache.copy()  # shallow copy suffices
 
         if self._constraint is None:
@@ -380,7 +381,7 @@ class TargetSpace:
 
     def probe(
         self, params: Mapping[str, float] | Sequence[float] | NDArray[Float]
-    ) -> float | tuple[float, float | NDArray[Float]]:
+    ) -> NDArray[Float] | tuple[NDArray[Float], float | NDArray[Float]]:
         """Evaluate the target function on a point and register the result.
 
         Notes
@@ -415,7 +416,7 @@ class TargetSpace:
         if self.target_func is None:
             error_msg = "No target function has been provided."
             raise ValueError(error_msg)
-        target = [func(**dict_params) for func in self.target_func]
+        target = np.array([func(**dict_params) for func in self.target_func])
 
         if self._constraint is None:
             self.register(x, target)
@@ -447,7 +448,7 @@ class TargetSpace:
             data.T[col] = self.random_state.uniform(lower, upper, size=1)
         return data.ravel()
 
-    def _target_max(self) -> float | None:
+    def _target_max(self) -> NDArray[Float] | None:
         """Get the maximum target value within the current parameter bounds.
 
         If there is a constraint present, the maximum value that fulfills the
@@ -464,7 +465,7 @@ class TargetSpace:
         if len(self.target[self.mask]) == 0:
             return None
 
-        return self.target[self.mask].max()
+        return np.max(self.target[self.mask], axis=0) ##Questionable on what is being maxed and why
 
     def max(self) -> dict[str, Any] | None:
         """Get maximum target value found and corresponding parameters.
@@ -484,17 +485,24 @@ class TargetSpace:
         if target_max is None:
             return None
 
-        MASK = self.mask.reshape(-1, len(self.target_func))
-        target = self.target[self.mask] 
-        params = self.params[:, MASK[-1,:]] ##Mask shape is wrong
-        target_max_idx = np.argmax(target)
-        res = {
-            "target": target_max, 
-            "params": dict(zip(self.keys, params[target_max_idx//len(self.target_func)-1]))
+        target = self.target[self.mask]
+        params = self.params[self.mask]
+        target_max_idx = np.argmax(target, axis=0)
+
+        # Create a dictionary with target values for each key
+        target_dict = {"target": {}}
+        for i, value in enumerate(target_max):
+            target_dict["target"][i+1] = value
+        # Create a dictionary with parameters for each target
+        params_dict = {
+            f"params": dict(zip(self.keys, params[idx]))
+            for key, idx in zip(self.keys, target_max_idx)
         }
+
+        res = {**target_dict, **params_dict}
         if self._constraint is not None:
-            constraint_values = self.constraint_values[:, MASK[-1,:]]
-            res["constraint"] = constraint_values[target_max_idx//len(self.target_func)-1]
+            constraint_values = self.constraint_values[self.mask]
+            res["constraint"] = constraint_values[target_max_idx[0]]
 
         return res
 

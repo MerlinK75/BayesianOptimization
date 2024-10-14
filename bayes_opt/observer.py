@@ -43,9 +43,18 @@ class _Tracker:
 
             current_max = instance.max
 
-            if self._previous_max is None or current_max["target"] > self._previous_max:
+            if self._previous_max is None or self._compare_max(current_max["target"], self._previous_max):
                 self._previous_max = current_max["target"]
                 self._previous_max_params = current_max["params"]
+
+    def _compare_max(self, current: dict, previous: dict | None) -> bool:
+        """Compare current and previous max values."""
+        if previous is None:
+            return True
+        for key in current:
+            if key not in previous or current[key] > previous[key]:
+                return True
+        return False
 
     def _time_metrics(self) -> tuple[str, float, float]:
         """Return time passed since last call."""

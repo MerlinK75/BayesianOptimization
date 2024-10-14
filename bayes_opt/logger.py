@@ -101,16 +101,20 @@ class ScreenLogger(_Tracker):
         -------
         A stringified, formatted version of `x`.
         """
-        if isinstance(x, int):
-            s = f"{x:<{self._default_cell_size}}"
+        if isinstance(x, np.ndarray):
+            # Format each element of the array
+            s = ", ".join(f"{val:.{self._default_precision}f}" for val in x)
+            # Truncate if too long
+            if len(s) > self._default_cell_size:
+                s = s[:self._default_cell_size - 3] + "..."
         else:
-            s = f"{x:<{self._default_cell_size}.{self._default_precision}}"
+            s = str(x)  # Fallback for other types
 
         if len(s) > self._default_cell_size:
             if "." in s:
                 return s[: self._default_cell_size]
             return s[: self._default_cell_size - 3] + "..."
-        return s
+        return s.ljust(self._default_cell_size)
 
     def _format_bool(self, x: bool) -> str:
         """Format a boolean.
@@ -161,18 +165,23 @@ class ScreenLogger(_Tracker):
         """
         res: dict[str, Any] = instance.res[-1]
         keys: list[str] = instance.space.keys
+        num_functions = len(instance._space.target_func)
         # iter, target, allowed [, *params]
-        cells: list[str | None] = [None] * (3 + len(keys))
+        cells: list[str | None] = [None] * (2 + num_functions + len(keys))
 
-        cells[:2] = self._format_number(self._iterations + 1), self._format_number(res["target"])
+        cells[0] = self._format_number(self._iterations + 1)
+        for i, target in enumerate(res["target"]):
+            cells[i + 1] = self._format_number(target)
+        
         if self._is_constrained:
-            cells[2] = self._format_bool(res["allowed"])
+            cells[1 + num_functions] = self._format_bool(res["allowed"])
+        
         params = res.get("params", {})
-        cells[3:] = [self._format_number(params.get(key, float("nan"))) for key in keys]
+        cells[(2 + num_functions):] = [self._format_number(params.get(key, float("nan"))) for key in keys]
 
         return "| " + " | ".join(colour + x + self._colour_reset for x in cells if x is not None) + " |"
 
-    def _header(self, instance: BayesianOptimization) -> str:
+    def _header(self, instance: BayesianOptimization) -> str: ###Updated to handle multiple targets
         """Print the header of the log.
 
         Parameters
@@ -185,13 +194,17 @@ class ScreenLogger(_Tracker):
         A stringified, formatted version of the most header.
         """
         keys: list[str] = instance.space.keys
+        num_functions = len(instance._space.target_func)
         # iter, target, allowed [, *params]
-        cells: list[str | None] = [None] * (3 + len(keys))
+        cells: list[str | None] = [None] * (2 + num_functions + len(keys))
 
-        cells[:2] = self._format_key("iter"), self._format_key("target")
+        cells[0] = self._format_key("iter")
+        for i in range(num_functions):
+            cells[i + 1] = self._format_key(f"target{i+1}")
+
         if self._is_constrained:
-            cells[2] = self._format_key("allowed")
-        cells[3:] = [self._format_key(key) for key in keys]
+            cells[1 + num_functions] = self._format_key("allowed")
+        cells[(2 + num_functions):] = [self._format_key(key) for key in keys]
 
         line = "| " + " | ".join(x for x in cells if x is not None) + " |"
         self._header_length = len(line)
@@ -216,7 +229,17 @@ class ScreenLogger(_Tracker):
             return False
         if self._previous_max is None:
             self._previous_max = instance.max["target"]
-        return instance.max["target"] > self._previous_max
+            return True
+        
+        new_max_found = False
+        for func_name, func_value in instance.max["target"].items():
+            if func_value > self._previous_max[func_name]:
+                new_max_found = True
+
+        if new_max_found:
+            self._previous_max = instance.max["target"]
+
+        return new_max_found
 
     def update(self, event: str, instance: BayesianOptimization) -> None:
         """Handle incoming events.
@@ -299,3 +322,4 @@ class JSONLogger(_Tracker):
                 f.write(json.dumps(data) + "\n")
 
         self._update_tracker(event, instance)
+
