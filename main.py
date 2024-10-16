@@ -10,7 +10,7 @@ def sphere(x, y):
 
 def branin(x,y):
     """Branin function with 2 inputs"""
-    return (y-((5.1/(4*np.pi**2))*x**2)+((5/np.pi)*x)-6)**2+10*(1-(1/(8*np.pi)))*np.cos(x)+10
+    return -((y-((5.1/(4*np.pi**2))*x**2)+((5/np.pi)*x)-6)**2+10*(1-(1/(8*np.pi)))*np.cos(x)+10)
 
 def hartmann_3(x,y,z):
     """Hartmann 3 function with 3 inputs"""

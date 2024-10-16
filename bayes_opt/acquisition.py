@@ -196,9 +196,8 @@ class AcquisitionFunction(abc.ABC):
                     std: NDArray[Float]
                     p_constraints: NDArray[Float]
                     gp_files = [f for f in os.listdir('Population_models') if f.startswith('GP') and f.endswith('.pkl')]
-                    for i, obj in enumerate(objective_functions):
-                        mean, std = gp.predict(x, return_std=True) # For each objective function so will need a for loop once made
-                        W = 1/(len(gp_files)+1)*(1/std**2)
+                    mean, std = gp.predict(x, return_std=True) # For each objective function so will need a for loop once made
+                    W = 1/(len(gp_files)+1)*(1/std**2)
                     sum_pw_acq = 0.0
                     sum_pw = 0.0
                     for gp_model in Pgp: #List of population models
