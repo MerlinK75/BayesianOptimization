@@ -74,18 +74,19 @@ class AcquisitionFunction(abc.ABC):
     def base_acq(self, *args: Any, **kwargs: Any) -> NDArray[Float]:
         """Provide access to the base acquisition function."""
 
-    def _fit_gp(self, gp: GaussianProcessRegressor, target_space: TargetSpace) -> None:
+    def _fit_gp(self, gp: list[GaussianProcessRegressor], target_space: TargetSpace) -> None:
         # Sklearn's GP throws a large number of warnings at times, but
         # we don't really need to see them here.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            gp.fit(target_space.params, target_space.target) #Params and Target of inputs of the Acq, but are arrays
+            for i, g in enumerate(gp):
+                g.fit(target_space.params, target_space.target[:,i]) #Params and Target of inputs of the Acq, but are arrays
             if target_space.constraint is not None:
                 target_space.constraint.fit(target_space.params, target_space._constraint_values)
 
     def suggest(
         self,
-        gp: GaussianProcessRegressor,
+        gp: list[GaussianProcessRegressor],
         target_space: TargetSpace,
         n_random: int = 10_000,
         n_l_bfgs_b: int = 10,
@@ -139,7 +140,7 @@ class AcquisitionFunction(abc.ABC):
             return self._acq_min(acq_TAF, target_space.bounds, n_random=n_random, n_l_bfgs_b=n_l_bfgs_b)
 
     def _get_acq(
-        self, gp: GaussianProcessRegressor, constraint: ConstraintModel | None = None, Pgp: list[GaussianProcessRegressor] | None = None
+        self, gp: list[GaussianProcessRegressor], constraint: ConstraintModel | None = None, Pgp: list[GaussianProcessRegressor] | None = None
     ) -> Callable[[NDArray[Float]], NDArray[Float]]:
         """Prepare the acquisition function for minimization.
 
@@ -162,7 +163,7 @@ class AcquisitionFunction(abc.ABC):
         Callable
             Function to minimize.
         """
-        dim = gp.X_train_.shape[1]
+        dim = gp[0].X_train_.shape[1] #With the assumption that all gp in list are the same dimension
         if constraint is not None and Pgp is None:
 
             def acq(x: NDArray[Float]) -> NDArray[Float]:

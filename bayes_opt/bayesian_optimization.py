@@ -115,6 +115,7 @@ class BayesianOptimization(Observable):
         population: bool = True, #Differenciation of population and adaptation
     ):
         self._population = population
+        self._gp = []
         self._random_state = ensure_rng(random_state)
         self._allow_duplicate_points = allow_duplicate_points
         self._queue: deque[Mapping[str, float] | Sequence[float] | NDArray[Float]] = deque()
@@ -140,13 +141,14 @@ class BayesianOptimization(Observable):
                     self._Pgp_list.append(pickle.load(file))
 
         # Internal GP regressor
-        self._gp = GaussianProcessRegressor(
-            kernel=Matern(nu=2.5),
-            alpha=1e-6,
-            normalize_y=True,
-            n_restarts_optimizer=5,
-            random_state=self._random_state,
-        )
+        for _ in f:  # Create a GP for each function in f
+            self._gp.append(GaussianProcessRegressor(
+                kernel=Matern(nu=2.5),
+                alpha=1e-6,
+                normalize_y=True,
+                n_restarts_optimizer=5,
+                random_state=self._random_state,
+            ))
 
         if constraint is None:
             # Data structure containing the function to be optimized, the
