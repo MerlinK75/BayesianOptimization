@@ -21,7 +21,7 @@ if __name__=='__main__':
         population=False)
     
     optimizer.maximize(
-    init_points=0,
+    init_points=10,
     n_iter=15)
 
     # for i, res in enumerate(optimizer.res):
