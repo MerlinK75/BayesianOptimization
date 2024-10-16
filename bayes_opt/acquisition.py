@@ -182,10 +182,14 @@ class AcquisitionFunction(abc.ABC):
                 x = x.reshape(-1, dim)
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    mean: NDArray[Float]
-                    std: NDArray[Float]
-                    mean, std = gp.predict(x, return_std=True)
-                
+                    mean = []
+                    std = []
+                    for g in gp:
+                        m, s = g.predict(x, return_std=True)
+                        mean.append(m)
+                        std.append(s)
+                    mean = np.array(mean)
+                    std = np.array(std)
                 return -1 * self.base_acq(mean, std)  
         elif constraint is not None:
 
@@ -351,7 +355,7 @@ class AcquisitionFunction(abc.ABC):
             return None, np.inf
         x_tries = self.random_state.uniform(bounds[:, 0], bounds[:, 1], size=(n_random, bounds.shape[0]))
         ys = acq(x_tries)
-        x_min = x_tries[ys.argmin()]
+        x_min = x_tries[ys.argmin(axis=-1)]
         min_acq = ys.min()
         return x_min, min_acq
 
@@ -734,7 +738,8 @@ class ExpectedImprovement(AcquisitionFunction):
                 "of suggest(), ensure y_max is set, or set it manually."
             )
             raise ValueError(msg)
-        a = mean - self.y_max - self.xi
+        
+        a = mean - self.y_max[:, np.newaxis] - self.xi
         z = a / std
         return a * norm.cdf(z) + std * norm.pdf(z)
 
