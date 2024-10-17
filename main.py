@@ -37,10 +37,12 @@ if __name__=='__main__':
     # Bounded region of parameter space
     pbounds = {'x': (-3, 3), 'y': (-3, 3)}
 
+    weights = [1.0, 0.0]
+
     optimizer = BayesianOptimization(
         f=[sphere, branin],
         pbounds=pbounds,
-        acquisition_function=ExpectedImprovement(xi=0.01),
+        acquisition_function=ExpectedImprovement(weights=weights, xi=0.01),
         population=True)
     
     optimizer.maximize(

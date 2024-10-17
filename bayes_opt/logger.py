@@ -170,14 +170,17 @@ class ScreenLogger(_Tracker):
         cells: list[str | None] = [None] * (2 + num_functions + len(keys))
 
         cells[0] = self._format_number(self._iterations + 1)
+        total_func = 0.0
         for i, target in enumerate(res["target"]):
-            cells[i + 1] = self._format_number(target)
+            cells[i + 2] = self._format_number(target)
+            total_func += target * instance.acquisition_function.weights[i]
+        cells[1] = self._format_number(total_func)
         
         if self._is_constrained:
-            cells[1 + num_functions] = self._format_bool(res["allowed"])
+            cells[2 + num_functions] = self._format_bool(res["allowed"])
         
         params = res.get("params", {})
-        cells[(2 + num_functions):] = [self._format_number(params.get(key, float("nan"))) for key in keys]
+        cells[(3 + num_functions):] = [self._format_number(params.get(key, float("nan"))) for key in keys]
 
         return "| " + " | ".join(colour + x + self._colour_reset for x in cells if x is not None) + " |"
 
@@ -199,12 +202,13 @@ class ScreenLogger(_Tracker):
         cells: list[str | None] = [None] * (2 + num_functions + len(keys))
 
         cells[0] = self._format_key("iter")
+        cells[1] = self._format_key("Total_func")
         for i in range(num_functions):
-            cells[i + 1] = self._format_key(f"target{i+1}")
+            cells[i + 2] = self._format_key(f"target{i+1}")
 
         if self._is_constrained:
-            cells[1 + num_functions] = self._format_key("allowed")
-        cells[(2 + num_functions):] = [self._format_key(key) for key in keys]
+            cells[2 + num_functions] = self._format_key("allowed")
+        cells[(3 + num_functions):] = [self._format_key(key) for key in keys]
 
         line = "| " + " | ".join(x for x in cells if x is not None) + " |"
         self._header_length = len(line)
@@ -227,17 +231,22 @@ class ScreenLogger(_Tracker):
             # value since the optimizer might've not encountered any points
             # that fulfill the constraints.
             return False
+        
+        total = 0.0
         if self._previous_max is None:
-            self._previous_max = instance.max["target"]
-            return True
+            for i, (func_name, func_value) in enumerate(instance.max["target"].items()):
+                total += func_value * instance.acquisition_function.weights[i]
+                self._previous_max = total
+                return True
         
         new_max_found = False
-        for func_name, func_value in instance.max["target"].items():
-            if func_value > self._previous_max[func_name]:
+        for i, (func_name, func_value) in enumerate(instance.max["target"].items()):
+            total += func_value * instance.acquisition_function.weights[i]
+            if total > self._previous_max:
                 new_max_found = True
 
         if new_max_found:
-            self._previous_max = instance.max["target"]
+            self._previous_max = total
 
         return new_max_found
 

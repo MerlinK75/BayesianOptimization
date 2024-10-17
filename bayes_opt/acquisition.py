@@ -60,7 +60,8 @@ class AcquisitionFunction(abc.ABC):
         Set the random state for reproducibility.
     """
 
-    def __init__(self, random_state: int | RandomState | None = None) -> None:
+    def __init__(self, weights: list[Float], random_state: int | RandomState | None = None,
+                 ) -> None:
         if random_state is not None:
             if isinstance(random_state, RandomState):
                 self.random_state = random_state
@@ -69,6 +70,7 @@ class AcquisitionFunction(abc.ABC):
         else:
             self.random_state = RandomState()
         self.i = 0
+        self.weights = weights
 
     @abc.abstractmethod
     def base_acq(self, *args: Any, **kwargs: Any) -> NDArray[Float]:
@@ -170,27 +172,23 @@ class AcquisitionFunction(abc.ABC):
                 x = x.reshape(-1, dim)
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    mean: NDArray[Float]
-                    std: NDArray[Float]
-                    p_constraints: NDArray[Float]
-                    mean, std = gp.predict(x, return_std=True)
+                    sum_EI = 0.0
+                    for i, g in enumerate(gp):
+                        mean, std = g.predict(x, return_std=True)
+                        sum_EI += self.weights[i] * self.base_acq(i, mean, std)
                     p_constraints = constraint.predict(x)
-                return -1 * self.base_acq(mean, std) * p_constraints
+                return -1 * sum_EI * p_constraints
+            
         elif constraint is None and Pgp is None:
-
             def acq(x: NDArray[Float]) -> NDArray[Float]:
                 x = x.reshape(-1, dim)
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    mean = []
-                    std = []
-                    for g in gp:
-                        m, s = g.predict(x, return_std=True)
-                        mean.append(m)
-                        std.append(s)
-                    mean = np.array(mean)
-                    std = np.array(std)
-                return -1 * self.base_acq(mean, std)  
+                    sum_EI = 0.0
+                    for i, g in enumerate(gp):
+                        mean, std = g.predict(x, return_std=True)
+                        sum_EI += self.weights[i] * self.base_acq(i, mean, std)
+                return -1 * sum_EI  
         elif constraint is not None:
 
             def acq(x: NDArray[Float]) -> NDArray[Float]:
@@ -701,17 +699,18 @@ class ExpectedImprovement(AcquisitionFunction):
     def __init__(
         self,
         xi: float,
+        weights: list[Float],
         exploration_decay: float | None = None,
         exploration_decay_delay: int | None = None,
         random_state: int | RandomState | None = None,
     ) -> None:
-        super().__init__(random_state=random_state)
+        super().__init__(weights=weights, random_state=random_state)
         self.xi = xi
         self.exploration_decay = exploration_decay
         self.exploration_decay_delay = exploration_decay_delay
         self.y_max = None
 
-    def base_acq(self, mean: NDArray[Float], std: NDArray[Float]) -> NDArray[Float]:
+    def base_acq(self, i: int, mean: NDArray[Float], std: NDArray[Float]) -> NDArray[Float]:
         """Calculate the expected improvement.
 
         Parameters
@@ -739,7 +738,7 @@ class ExpectedImprovement(AcquisitionFunction):
             )
             raise ValueError(msg)
         
-        a = mean - self.y_max[:, np.newaxis] - self.xi
+        a = mean - self.y_max[i] - self.xi
         z = a / std
         return a * norm.cdf(z) + std * norm.pdf(z)
 

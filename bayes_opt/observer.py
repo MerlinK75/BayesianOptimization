@@ -47,7 +47,7 @@ class _Tracker:
                 self._previous_max = current_max["target"]
                 self._previous_max_params = current_max["params"]
 
-    def _compare_max(self, current: dict, previous: dict | None) -> bool:
+    def _compare_max(self, current: float, previous: float) -> bool:
         """Compare current and previous max values."""
         if previous is None:
             return True
