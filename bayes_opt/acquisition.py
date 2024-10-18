@@ -60,7 +60,11 @@ class AcquisitionFunction(abc.ABC):
         Set the random state for reproducibility.
     """
 
-    def __init__(self, weights: list[Float], random_state: int | RandomState | None = None,
+    def __init__(self, 
+                 weights: list[Float], 
+                 random_state: int | RandomState | None = None,
+                 p_decay: int | None = None,
+                 p_decay_rate: float | None = None,
                  ) -> None:
         if random_state is not None:
             if isinstance(random_state, RandomState):
@@ -71,6 +75,8 @@ class AcquisitionFunction(abc.ABC):
             self.random_state = RandomState()
         self.i = 0
         self.weights = weights
+        self.p_decay = p_decay
+        self.p_decay_rate = p_decay_rate
 
     @abc.abstractmethod
     def base_acq(self, *args: Any, **kwargs: Any) -> NDArray[Float]:
@@ -93,9 +99,8 @@ class AcquisitionFunction(abc.ABC):
         n_random: int = 10_000,
         n_l_bfgs_b: int = 10,
         fit_gp: bool = True,
-        #pop_acq: AcquisitionFunction | None = None,
         pop_gp: list[GaussianProcessRegressor] | None = None,
-        #pop_space: TargetSpace | None = None,
+        iter: int | None = None,
     ) -> NDArray[Float]:
         """Suggest a promising point to probe next.
 
@@ -138,11 +143,14 @@ class AcquisitionFunction(abc.ABC):
             acq = self._get_acq(gp=gp, constraint=target_space.constraint)
             return self._acq_min(acq, target_space.bounds, n_random=n_random, n_l_bfgs_b=n_l_bfgs_b)
         else:
-            acq_TAF = self._get_acq(gp=gp, constraint=target_space.constraint, Pgp=pop_gp)
+            acq_TAF = self._get_acq(gp=gp, constraint=target_space.constraint, Pgp=pop_gp, iter=iter)
             return self._acq_min(acq_TAF, target_space.bounds, n_random=n_random, n_l_bfgs_b=n_l_bfgs_b)
 
     def _get_acq(
-        self, gp: list[GaussianProcessRegressor], constraint: ConstraintModel | None = None, Pgp: list[GaussianProcessRegressor] | None = None
+        self, gp: list[GaussianProcessRegressor], 
+        constraint: ConstraintModel | None = None, 
+        Pgp: list[GaussianProcessRegressor] | None = None,
+        iter: int | None = None,
     ) -> Callable[[NDArray[Float]], NDArray[Float]]:
         """Prepare the acquisition function for minimization.
 
@@ -195,40 +203,68 @@ class AcquisitionFunction(abc.ABC):
                 x = x.reshape(-1, dim)
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    mean: NDArray[Float]
-                    std: NDArray[Float]
                     p_constraints: NDArray[Float]
                     gp_files = [f for f in os.listdir('Population_models') if f.startswith('GP') and f.endswith('.pkl')]
-                    mean, std = gp.predict(x, return_std=True) # For each objective function so will need a for loop once made
-                    W = 1/(len(gp_files)+1)*(1/std**2)
+                    sum_EI = 0.0
+                    sum_W = 0.0
+                    for i, g in enumerate(gp):
+                        mean, std = g.predict(x, return_std=True)
+                        sum_W += 1/(len(gp_files)+1)*(1/std**2) * self.weights[i]
+                        sum_EI += self.weights[i] * self.base_acq(i, mean, std)
                     sum_pw_acq = 0.0
                     sum_pw = 0.0
+
+                    if iter > self.p_decay:
+                        decay = 1 - (iter-self.p_decay) * self.p_decay_rate
+                    elif iter >= (self.p_decay + 1/self.p_decay_rate):
+                        decay = 0
+                    else:
+                        decay = 1
+
                     for gp_model in Pgp: #List of population models
-                        Pmean, Pstd = gp_model.predict(x, return_std=True)
-                        PW = 1/(len(gp_files)+1)*(1/Pstd**2)
-                        sum_pw_acq += PW * self.base_acq(Pmean, Pstd)
-                        sum_pw += PW
+                        PW = 0.0
+                        PEI = 0.0
+                        for i, g in enumerate(gp_model):
+                            Pmean, Pstd = g.predict(x, return_std=True)
+                            PW += 1/(len(gp_files)+1)*(1/Pstd**2) * self.weights[i] #Decay Function
+                            PEI += self.weights[i] * self.base_acq(i, Pmean, Pstd)
+                        sum_pw_acq += (decay * PW) * PEI 
+                        sum_pw += decay * PW
                     p_constraints = constraint.predict(x)
-                    return -1 * ((sum_pw_acq + W * self.base_acq(mean, std)) / sum_pw) * p_constraints
+                    return -1 * ((sum_pw_acq + sum_W * sum_EI) / (sum_pw + sum_W)) * p_constraints
         else:
 
             def acq(x: NDArray[Float]) -> NDArray[Float]:
                 x = x.reshape(-1, dim)
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    mean: NDArray[Float]
-                    std: NDArray[Float]
-                    mean, std = gp.predict(x, return_std=True)
                     gp_files = [f for f in os.listdir('Population_models') if f.startswith('GP') and f.endswith('.pkl')]
-                    W = 1/(len(gp_files)+1)*(1/std**2)
+                    sum_EI = 0.0
+                    sum_W = 0.0
+                    for i, g in enumerate(gp):
+                        mean, std = g.predict(x, return_std=True)
+                        sum_W += 1/(len(gp_files)+1)*(1/std**2) * self.weights[i]
+                        sum_EI += self.weights[i] * self.base_acq(i, mean, std)
                     sum_pw_acq = 0.0
                     sum_pw = 0.0
-                    for gp_model in Pgp:
-                        Pmean, Pstd = gp_model.predict(x, return_std=True)
-                        PW = 1/(len(gp_files)+1)*(1/Pstd**2)
-                        sum_pw_acq += PW * self.base_acq(Pmean, Pstd)
-                        sum_pw += PW
-                    return -1 * ((sum_pw_acq + W * self.base_acq(mean, std)) / sum_pw)
+
+                    if iter > self.p_decay:
+                        decay = 1 - (iter-self.p_decay) * self.p_decay_rate
+                    elif iter >= (self.p_decay + 1/self.p_decay_rate):
+                        decay = 0
+                    else:
+                        decay = 1
+
+                    for gp_model in Pgp: #List of population models
+                        PW = 0.0
+                        PEI = 0.0
+                        for i, g in enumerate(gp_model):
+                            Pmean, Pstd = g.predict(x, return_std=True)
+                            PW += 1/(len(gp_files)+1)*(1/Pstd**2) * self.weights[i] #Decay Function
+                            PEI += self.weights[i] * self.base_acq(i, Pmean, Pstd)
+                        sum_pw_acq += (decay * PW) * PEI 
+                        sum_pw += decay * PW
+                    return -1 * ((sum_pw_acq + sum_W * sum_EI) / (sum_pw + sum_W))
 
         return acq
 
@@ -700,11 +736,16 @@ class ExpectedImprovement(AcquisitionFunction):
         self,
         xi: float,
         weights: list[Float],
+        p_decay: int | None = None,
+        p_decay_rate: float | None = None,
         exploration_decay: float | None = None,
         exploration_decay_delay: int | None = None,
         random_state: int | RandomState | None = None,
     ) -> None:
-        super().__init__(weights=weights, random_state=random_state)
+        super().__init__(weights=weights, 
+                         random_state=random_state,
+                         p_decay=p_decay,
+                         p_decay_rate=p_decay_rate)
         self.xi = xi
         self.exploration_decay = exploration_decay
         self.exploration_decay_delay = exploration_decay_delay
@@ -749,9 +790,8 @@ class ExpectedImprovement(AcquisitionFunction):
         n_random: int = 10_000,
         n_l_bfgs_b: int = 10,
         fit_gp: bool = True,
-        #pop_acq: AcquisitionFunction | None = None,
         pop_gp: list[GaussianProcessRegressor] | None = None,
-        #pop_space: TargetSpace | None = None,
+        iter: int | None = None,
     ) -> NDArray[Float]:
         """Suggest a promising point to probe next.
 
@@ -791,9 +831,8 @@ class ExpectedImprovement(AcquisitionFunction):
 
         x_max = super().suggest(
             gp=gp, target_space=target_space, n_random=n_random, n_l_bfgs_b=n_l_bfgs_b, fit_gp=fit_gp, 
-            #pop_acq=pop_acq, 
             pop_gp=pop_gp, 
-            #pop_space=pop_space,
+            iter=iter,
         )
         self.decay_exploration()
         return x_max

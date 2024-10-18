@@ -37,17 +37,22 @@ if __name__=='__main__':
     # Bounded region of parameter space
     pbounds = {'x': (-3, 3), 'y': (-3, 3)}
 
-    weights = [1.0, 0.0]
+    weights = [0.0, 1.0]
 
     optimizer = BayesianOptimization(
         f=[sphere, branin],
         pbounds=pbounds,
-        acquisition_function=ExpectedImprovement(weights=weights, xi=0.01),
-        population=True)
+        acquisition_function=ExpectedImprovement(weights=weights, 
+                                                 xi=0.01,
+                                                 p_decay=30,
+                                                 p_decay_rate=0.001,
+                                                 ),
+        population=False, #Adaptation model is funky and good at start but not good otherwise
+        save=False)
     
     optimizer.maximize(
-    init_points=10,
-    n_iter=15)
+    init_points=0,
+    n_iter=25)
 
     # for i, res in enumerate(optimizer.res):
     #     print("Iteration {}: \n\t{}".format(i, res))

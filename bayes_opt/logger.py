@@ -202,7 +202,7 @@ class ScreenLogger(_Tracker):
         cells: list[str | None] = [None] * (2 + num_functions + len(keys))
 
         cells[0] = self._format_key("iter")
-        cells[1] = self._format_key("Total_func")
+        cells[1] = self._format_key("Total")
         for i in range(num_functions):
             cells[i + 2] = self._format_key(f"target{i+1}")
 
@@ -232,20 +232,19 @@ class ScreenLogger(_Tracker):
             # that fulfill the constraints.
             return False
         
+        res: dict[str, Any] = instance.res[-1]
         total = 0.0
         if self._previous_max is None:
-            for i, (func_name, func_value) in enumerate(instance.max["target"].items()):
+            for i, (func_value) in enumerate(res["target"]):
                 total += func_value * instance.acquisition_function.weights[i]
-                self._previous_max = total
-                return True
+            self._previous_max = total
+            return True
         
-        new_max_found = False
-        for i, (func_name, func_value) in enumerate(instance.max["target"].items()):
+        new_max_found = False 
+        for i, (func_value) in enumerate(res["target"]):
             total += func_value * instance.acquisition_function.weights[i]
-            if total > self._previous_max:
-                new_max_found = True
-
-        if new_max_found:
+        if total > self._previous_max:
+            new_max_found = True
             self._previous_max = total
 
         return new_max_found

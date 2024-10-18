@@ -40,20 +40,23 @@ class _Tracker:
 
             if instance.max is None:
                 return
+            
+            # res: dict[str, Any] = instance.res[-1]
 
-            current_max = instance.max
+            # current_max = 0.0
+            # for i, (func_value) in enumerate(res["target"]):
+            #     current_max += func_value * instance.acquisition_function.weights[i]
 
-            if self._previous_max is None or self._compare_max(current_max["target"], self._previous_max):
-                self._previous_max = current_max["target"]
-                self._previous_max_params = current_max["params"]
+            # if self._previous_max is None or self._compare_max(current_max, self._previous_max):
+            #     self._previous_max = current_max
+            #     self._previous_max_params = instance.max["params"]
 
-    def _compare_max(self, current: float, previous: float) -> bool:
+    def _compare_max(self, current: float, previous: float | None = None) -> bool:
         """Compare current and previous max values."""
         if previous is None:
             return True
-        for key in current:
-            if key not in previous or current[key] > previous[key]:
-                return True
+        if current > previous:
+            return True
         return False
 
     def _time_metrics(self) -> tuple[str, float, float]:

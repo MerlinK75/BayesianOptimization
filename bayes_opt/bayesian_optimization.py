@@ -112,10 +112,12 @@ class BayesianOptimization(Observable):
         verbose: int = 2,
         bounds_transformer: DomainTransformer | None = None,
         allow_duplicate_points: bool = False,
-        population: bool = True, #Differenciation of population and adaptation
+        population: bool = True,
+        save: bool = False
     ):
         self._population = population
         self._gp = []
+        self._save = save
         self._random_state = ensure_rng(random_state)
         self._allow_duplicate_points = allow_duplicate_points
         self._queue: deque[Mapping[str, float] | Sequence[float] | NDArray[Float]] = deque()
@@ -269,9 +271,8 @@ class BayesianOptimization(Observable):
             suggestion = self._acquisition_function.suggest(gp=self._gp, target_space=self._space, fit_gp=True)
         else:
             suggestion = self._acquisition_function.suggest(gp=self._gp, target_space=self._space, fit_gp=True, 
-                                                            #pop_acq=self._PAcquisition_function, 
                                                             pop_gp=self._Pgp_list, 
-                                                            #pop_space=self._Pspace
+                                                            iter=self.iteration
                                                             )
 
 
@@ -324,21 +325,21 @@ class BayesianOptimization(Observable):
         self.dispatch(Events.OPTIMIZATION_START)
         self._prime_queue(init_points)
 
-        iteration = 0
-        while self._queue or iteration < n_iter:
+        self.iteration = 0
+        while self._queue or self.iteration < n_iter:
             try:
                 x_probe = self._queue.popleft()
             except IndexError:
                 x_probe = self.suggest()
-                iteration += 1
+                self.iteration += 1
             self.probe(x_probe, lazy=False)
 
-            if self._bounds_transformer and iteration > 0:
+            if self._bounds_transformer and self.iteration > 0:
                 # The bounds transformer should only modify the bounds after
                 # the init_points points (only for the true iterations)
                 self.set_bounds(self._bounds_transformer.transform(self._space))
 
-        if self._population:
+        if self._population and self._save:
 
             # Get the list of existing GP files
             existing_files = [f for f in os.listdir('Population_models') if f.startswith('GP') and f.endswith('.pkl')]
