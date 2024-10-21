@@ -37,7 +37,7 @@ if __name__=='__main__':
     # Bounded region of parameter space
     pbounds = {'x': (-3, 3), 'y': (-3, 3)}
 
-    weights = [0.0, 1.0]
+    weights = [1.0, 0.0]
 
     optimizer = BayesianOptimization(
         f=[sphere, branin],
@@ -47,11 +47,11 @@ if __name__=='__main__':
                                                  p_decay=30,
                                                  p_decay_rate=0.0001,
                                                  ),
-        population=False, #Adaptation model is funky and good at start but not good otherwise
+        population=True, #Adaptation model is funky and good at start but not good otherwise
         save=False) #Additionally try to make py file that plots pop models
     
     optimizer.maximize(
-    init_points=1,
+    init_points=10,
     n_iter=25)
 
     # for i, res in enumerate(optimizer.res):

@@ -32,6 +32,7 @@ from scipy.optimize import minimize
 from scipy.special import softmax
 from scipy.stats import norm
 from sklearn.gaussian_process import GaussianProcessRegressor
+import matplotlib.pyplot as plt
 
 from bayes_opt.exception import (
     ConstraintNotSupportedError,
@@ -245,18 +246,6 @@ class AcquisitionFunction(abc.ABC):
                         mean, std = g.predict(x, return_std=True)
                         sum_W += 1/(len(gp_files)+1)*(1/std**2) * self.weights[i]
                         sum_EI += self.weights[i] * self.base_acq(i, mean, std)
-                        plt.figure(figsize=(10, 5))
-                        plt.plot(x[:,0], mean, 'r-', label='Mean')
-                        plt.fill_between(x[:,0].flatten(), 
-                                         mean - 1.96 * std, 
-                                         mean + 1.96 * std, 
-                                         alpha=0.2, 
-                                         label='95% Confidence Interval')
-                        plt.title(f'Gaussian Process Prediction for Model {i}')
-                        plt.xlabel('Input')
-                        plt.ylabel('Output')
-                        plt.legend()
-                        plt.show()  # Display the plot
 
                     sum_pw_acq = 0.0
                     sum_pw = 0.0
