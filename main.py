@@ -45,13 +45,13 @@ if __name__=='__main__':
         acquisition_function=ExpectedImprovement(weights=weights, 
                                                  xi=0.01,
                                                  p_decay=30,
-                                                 p_decay_rate=0.001,
+                                                 p_decay_rate=0.0001,
                                                  ),
         population=False, #Adaptation model is funky and good at start but not good otherwise
-        save=False)
+        save=False) #Additionally try to make py file that plots pop models
     
     optimizer.maximize(
-    init_points=0,
+    init_points=1,
     n_iter=25)
 
     # for i, res in enumerate(optimizer.res):

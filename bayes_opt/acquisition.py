@@ -245,6 +245,19 @@ class AcquisitionFunction(abc.ABC):
                         mean, std = g.predict(x, return_std=True)
                         sum_W += 1/(len(gp_files)+1)*(1/std**2) * self.weights[i]
                         sum_EI += self.weights[i] * self.base_acq(i, mean, std)
+                        plt.figure(figsize=(10, 5))
+                        plt.plot(x[:,0], mean, 'r-', label='Mean')
+                        plt.fill_between(x[:,0].flatten(), 
+                                         mean - 1.96 * std, 
+                                         mean + 1.96 * std, 
+                                         alpha=0.2, 
+                                         label='95% Confidence Interval')
+                        plt.title(f'Gaussian Process Prediction for Model {i}')
+                        plt.xlabel('Input')
+                        plt.ylabel('Output')
+                        plt.legend()
+                        plt.show()  # Display the plot
+
                     sum_pw_acq = 0.0
                     sum_pw = 0.0
 
@@ -267,52 +280,6 @@ class AcquisitionFunction(abc.ABC):
                     return -1 * ((sum_pw_acq + sum_W * sum_EI) / (sum_pw + sum_W))
 
         return acq
-
-    # def _acq_min_TAF( ###Need to implement weights in this function
-    #     self,
-    #     acq_A: Callable[[NDArray[Float]], NDArray[Float]],
-    #     acq_P: Callable[[NDArray[Float]], NDArray[Float]],
-    #     bounds: NDArray[Float],
-    #     n_random: int = 10_000,
-    #     n_l_bfgs_b: int = 10,
-    # ) -> NDArray[Float]:
-    #     """Find the maximum of the acquisition function.
-
-    #     Uses a combination of random sampling (cheap) and the 'L-BFGS-B'
-    #     optimization method. First by sampling `n_warmup` (1e5) points at random,
-    #     and then running L-BFGS-B from `n_iter` (10) random starting points.
-
-    #     Parameters
-    #     ----------
-    #     acq : Callable
-    #         Acquisition function to use. Should accept an array of parameters `x`.
-
-    #     bounds : np.ndarray
-    #         Bounds of the search space. For `N` parameters this has shape
-    #         `(N, 2)` with `[i, 0]` the lower bound of parameter `i` and
-    #         `[i, 1]` the upper bound.
-
-    #     n_random : int
-    #         Number of random samples to use.
-
-    #     n_l_bfgs_b : int
-    #         Number of starting points for the L-BFGS-B optimizer.
-
-    #     Returns
-    #     -------
-    #     np.ndarray
-    #         Parameters maximizing the acquisition function.
-
-    #     """
-    #     if n_random == 0 and n_l_bfgs_b == 0:
-    #         error_msg = "Either n_random or n_l_bfgs_b needs to be greater than 0."
-    #         raise ValueError(error_msg)
-    #     x_min_r, min_acq_r = self._random_sample_minimize(acq, bounds, n_random=n_random)
-    #     x_min_l, min_acq_l = self._l_bfgs_b_minimize(acq, bounds, n_x_seeds=n_l_bfgs_b)
-    #     # Either n_random or n_l_bfgs_b is not 0 => at least one of x_min_r and x_min_l is not None
-    #     if min_acq_r < min_acq_l:
-    #         return x_min_r
-    #     return x_min_l
 
     def _acq_min(
         self,
