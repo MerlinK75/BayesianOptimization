@@ -47,11 +47,11 @@ if __name__=='__main__':
                                                  p_decay=30,
                                                  p_decay_rate=0.0001,
                                                  ),
-        population=True, #Adaptation model is funky and good at start but not good otherwise
+        population=False, #Adaptation model is funky and good at start but not good otherwise
         save=False) #Additionally try to make py file that plots pop models
     
     optimizer.maximize(
-    init_points=10,
+    init_points=0,
     n_iter=25)
 
     # for i, res in enumerate(optimizer.res):
