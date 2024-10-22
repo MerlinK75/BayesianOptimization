@@ -222,7 +222,7 @@ class AcquisitionFunction(abc.ABC):
                         PW = (4 - Pstd) / 4
                         sum_pw_acq += PW * self.base_acq(Pmean, Pstd)
                         sum_pw += PW
-                    return -1 * ((sum_pw_acq + W * self.base_acq(mean, std)) / sum_pw)
+                    return -1 * ((sum_pw_acq + W * self.base_acq(mean, std)) / (sum_pw+W))
 
         return acq
 
