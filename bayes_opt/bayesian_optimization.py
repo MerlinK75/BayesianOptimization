@@ -13,6 +13,7 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import Matern
 import pickle
 import os
+import numpy as np
 
 from bayes_opt import acquisition
 from bayes_opt.constraint import ConstraintModel
@@ -24,7 +25,6 @@ from bayes_opt.util import ensure_rng
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
-    import numpy as np
     from numpy.random import RandomState
     from numpy.typing import NDArray
     from scipy.optimize import NonlinearConstraint
@@ -251,6 +251,9 @@ class BayesianOptimization(Observable):
             If True, the optimizer will evaluate the points when calling
             maximize(). Otherwise it will evaluate it at the moment.
         """
+        if not isinstance(params, dict):
+            self._acquisition_function.BB.freq_assign(np.round(params,1))
+        
         if lazy:
             self._queue.append(params)
         else:

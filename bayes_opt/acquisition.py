@@ -37,6 +37,7 @@ from bayes_opt.exception import (
     NoValidPointRegisteredError,
     TargetSpaceEmptyError,
 )
+from bayes_opt.BB_audio import Audio
 from bayes_opt.target_space import TargetSpace
 
 if TYPE_CHECKING:
@@ -702,6 +703,8 @@ class ExpectedImprovement(AcquisitionFunction):
         self.exploration_decay = exploration_decay
         self.exploration_decay_delay = exploration_decay_delay
         self.y_max = None
+        self.BB = Audio()
+        self.BB.main()
 
     def base_acq(self, mean: NDArray[Float], std: NDArray[Float]) -> NDArray[Float]:
         """Calculate the expected improvement.
@@ -780,13 +783,16 @@ class ExpectedImprovement(AcquisitionFunction):
             )
             raise NoValidPointRegisteredError(msg)
         self.y_max = y_max
-
         x_max = super().suggest(
             gp=gp, target_space=target_space, n_random=n_random, n_l_bfgs_b=n_l_bfgs_b, fit_gp=fit_gp, 
             #pop_acq=pop_acq, 
             pop_gp=pop_gp, 
             #pop_space=pop_space,
         )
+        if not self.BB.freq - self.BB.freq == np.round(x_max, 1):
+            self.BB.freq_assign(np.round(x_max, 1))
+            
+
         self.decay_exploration()
         return x_max
 

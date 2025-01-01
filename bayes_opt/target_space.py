@@ -10,6 +10,7 @@ from colorama import Fore
 
 from bayes_opt.exception import NotUniqueError
 from bayes_opt.util import ensure_rng
+from bayes_opt.EEG.EEG_acquisition import Framework
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -412,7 +413,9 @@ class TargetSpace:
             return self._cache[_hashable(x.ravel())]
 
         dict_params = self.array_to_params(x)
-        if self.target_func is None:
+        ##We have to remove the target_func and just make target the output we are looking for
+        ##Also if we need to have multiple target inputs we can check with the section we stated in our tag
+        if self.target_func is None: 
             error_msg = "No target function has been provided."
             raise ValueError(error_msg)
         target = self.target_func(**dict_params)
